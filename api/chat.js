@@ -12,4 +12,49 @@ Facts you know:
 
 If asked about booking or appointments, encourage them to book online via Fresha or call the salon directly. Keep replies short (2-3 sentences), warm, friendly. Answer only using these facts. If asked something unrelated or you don't know the answer, politely suggest they call the salon directly on 01253 400719.`;
 
-export default async function handler(req,
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  try {
+    const { messages } = req.body;
+
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ error: 'Missing or invalid messages array' });
+    }
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1000,
+        system: SYSTEM_PROMPT,
+        messages: messages
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error('Anthropic API error:', data);
+      return res.status(500).json({ error: 'Failed to get response from AI' });
+    }
+
+    const text = data.content.map(c => c.text || '').join('');
+    return res.status(200).json({ reply: text });
+
+  } catch (err) {
+    console.error('Server error:', err);
+    return res.status(500).json({ error: 'Something went wrong' });
+  }
+}
